@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Command Storage</title>
+  <style>
+    :root {
+      --bg: #121212;
+      --card: #1e1e1e;
+      --card-hover: #2a2a2a;
+      --text: #e0e0e0;
+      --muted: #888;
+      --accent: #bb86fc;
+      --input: #1f1f1f;
+      --border: #333;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 2rem;
+      background: var(--bg); color: var(--text);
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { color: var(--accent); margin-bottom: 1rem; }
+
+    .top-bar {
+      display: flex; align-items: center;
+      margin-bottom: 1rem;
+    }
+    .search-box {
+      flex: 1;
+      padding: 0.5rem;
+      background: var(--input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+    }
+    .search-box::placeholder { color: var(--muted); }
+
+    .add-btn {
+      margin-left: 1rem;
+      background: var(--accent);
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      color: #121212;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .add-btn:hover { background: #9a56d1; }
+
+    .command-card {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      margin-bottom: 0.75rem;
+      transition: background 0.2s;
+      cursor: pointer;
+    }
+    .command-card:hover { background: var(--card-hover); }
+
+    .command-text {
+      flex: 1;
+      font-family: monospace;
+      font-size: 0.95rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .delete-btn {
+      background: none; border: none; padding: 0;
+      margin-left: 1rem;
+      cursor: pointer;
+      color: #f44336;
+      transition: color 0.2s;
+    }
+    .delete-btn:hover { color: #ff7961; }
+    .delete-btn svg { width: 1rem; height: 1rem; fill: currentColor; }
+
+    /* Modal Styles */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6);
+      display: none; align-items: center; justify-content: center;
+    }
+    .modal-overlay.active { display: flex; }
+
+    .modal {
+      background: var(--card);
+      padding: 1.5rem;
+      border-radius: 8px;
+      width: 90%; max-width: 400px;
+      position: relative;
+    }
+    .modal h2 { margin-top: 0; color: var(--accent); }
+    .modal .close-btn {
+      position: absolute; top: 0.5rem; right: 0.5rem;
+      background: none; border: none;
+      color: var(--muted); font-size: 1.25rem;
+      cursor: pointer;
+    }
+    .modal .close-btn:hover { color: var(--text); }
+
+    .modal input, .modal textarea {
+      width: 100%; padding: 0.5rem;
+      margin-bottom: 1rem;
+      background: var(--input);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text); font-size: 1rem;
+    }
+    .modal textarea { resize: vertical; }
+
+    .modal .submit-btn {
+      background: var(--accent);
+      border: none;
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 6px;
+      color: #121212;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .modal .submit-btn:hover { background: #9a56d1; }
+
+    /* Toast notification */
+    #toast {
+      position: fixed;
+      bottom: 1rem; right: 1rem;
+      background: var(--accent);
+      color: #121212;
+      padding: 0.75rem 1.25rem;
+      border-radius: 6px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      font-size: 0.95rem;
+    }
+    #toast.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Command Storage</h1>
+    <div class="top-bar">
+      <input id="search" class="search-box" placeholder="Search commands…">
+      <button class="add-btn" id="open-modal">Add Command</button>
+    </div>
+    <div id="commands-container"></div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal">
+      <button class="close-btn" id="close-modal">&times;</button>
+      <h2>Add New Command</h2>
+      <form id="add-command-form">
+        <input type="text" id="command-name" placeholder="Command Name" required>
+        <textarea id="command-text" placeholder="Command" required></textarea>
+        <textarea id="command-description" placeholder="Description (optional)"></textarea>
+        <button type="submit" class="submit-btn">Add Command</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast">Copied</div>
+
+  <script>
+    let commands = JSON.parse(localStorage.getItem('commands')) || [];
+    const modalOverlay = document.getElementById('modal-overlay');
+    const toastEl = document.getElementById('toast');
+
+    document.getElementById('open-modal').onclick = () =>
+      modalOverlay.classList.add('active');
+    document.getElementById('close-modal').onclick = () =>
+      modalOverlay.classList.remove('active');
+
+    function showToast(msg = 'Copied') {
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      setTimeout(() => toastEl.classList.remove('show'), 1500);
+    }
+
+    function displayCommands(list = commands) {
+      const container = document.getElementById('commands-container');
+      container.innerHTML = '';
+      list.forEach((cmd, i) => {
+        const card = document.createElement('div');
+        card.className = 'command-card';
+        card.title = `Name: ${cmd.name}` + (cmd.description ? `\n${cmd.description}` : '');
+        card.innerHTML = `
+          <div class="command-text">${cmd.text}</div>
+          <button class="delete-btn" onclick="deleteCommand(event, ${i})">
+            <svg viewBox="0 0 16 16">
+              <path d="M6 2h4v1H6V2z"/>
+              <path fill-rule="evenodd"
+                d="M4.5 3a.5.5 0 0 0-.5.5V4h9v-.5a.5.5 0 0 0-.5-.5h-8zm1.354 2.146a.5.5 0 0 1 .708 0L8 6.293l1.438-1.438a.5.5 0 1 1 .707.707L8.707 7l1.438 1.438a.5.5 0 0 1-.707.707L8 7.707l-1.438 1.438a.5.5 0 0 1-.707-.707L7.293 7 5.854 5.562a.5.5 0 0 1 0-.707z"/>
+            </svg>
+          </button>
+        `;
+        card.addEventListener('click', e => {
+          if (!e.target.closest('.delete-btn')) {
+            navigator.clipboard.writeText(cmd.text);
+            showToast();
+          }
+        });
+        container.appendChild(card);
+      });
+    }
+
+    document.getElementById('add-command-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const n = e.target['command-name'].value.trim();
+      const t = e.target['command-text'].value.trim();
+      const d = e.target['command-description'].value.trim();
+      commands.push({ name: n, text: t, description: d, date: new Date().toISOString() });
+      localStorage.setItem('commands', JSON.stringify(commands));
+      displayCommands();
+      e.target.reset();
+      modalOverlay.classList.remove('active');
+    });
+
+    document.getElementById('search').addEventListener('input', e => {
+      const term = e.target.value.toLowerCase();
+      displayCommands(commands.filter(c =>
+        c.name.toLowerCase().includes(term) ||
+        c.text.toLowerCase().includes(term) ||
+        (c.description && c.description.toLowerCase().includes(term))
+      ));
+    });
+
+    function deleteCommand(event, i) {
+      event.stopPropagation();
+      commands.splice(i, 1);
+      localStorage.setItem('commands', JSON.stringify(commands));
+      displayCommands();
+    }
+
+    displayCommands();
+  </script>
+</body>
+</html>
